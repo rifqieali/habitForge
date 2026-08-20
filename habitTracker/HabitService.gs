@@ -10,9 +10,6 @@ function getAllHabits() {
 }
 
 function createHabit(habitData) {
-  var habits = readAll('Habits');
-  var maxOrder = habits.reduce(function(max, h) { return Math.max(max, h.sort_order || 0); }, 0);
-  
   var habit = {
     id: generateId(),
     name: habitData.name,
@@ -23,7 +20,7 @@ function createHabit(habitData) {
     frequency_value: habitData.frequency_value || '',
     color: habitData.color || '#8b5cf6',
     icon: habitData.icon || '⭐',
-    sort_order: maxOrder + 1,
+    sort_order: new Date().getTime(),
     created_at: new Date(),
     archived: false
   };
