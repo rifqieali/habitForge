@@ -1,3 +1,127 @@
 <script>
-  console.log('HabitForge initialized');
+var App = {
+  state: {
+    activeTab: 'dashboard',
+    habits: [],
+    todayLogs: [],
+    streaks: [],
+    config: {},
+    todayStr: '',
+    loading: true,
+    modalOpen: false
+  },
+  
+  init: function() {
+    App.bindTabNavigation();
+    App.bindFAB();
+    App.loadDashboardData();
+  },
+  
+  setState: function(updates) {
+    Object.keys(updates).forEach(function(k) { App.state[k] = updates[k]; });
+    App.render();
+  },
+  
+  render: function() {
+    switch (App.state.activeTab) {
+      case 'dashboard': renderDashboard(); break;
+      case 'history': renderHistory(); break;
+      case 'stats': renderStats(); break;
+      case 'settings': renderSettings(); break;
+    }
+  },
+  
+  switchTab: function(tabName) {
+    App.state.activeTab = tabName;
+    document.querySelectorAll('.tab-panel').forEach(function(p) {
+      p.classList.remove('active');
+    });
+    var activePanel = document.getElementById('tab-' + tabName);
+    if (activePanel) activePanel.classList.add('active');
+    
+    document.querySelectorAll('.tab-btn').forEach(function(b) {
+      b.classList.toggle('active', b.dataset.tab === tabName);
+    });
+    
+    var fab = document.getElementById('fab');
+    if (fab) fab.style.display = tabName === 'dashboard' ? 'flex' : 'none';
+    
+    App.render();
+  },
+  
+  bindTabNavigation: function() {
+    document.querySelectorAll('.tab-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        App.switchTab(this.dataset.tab);
+      });
+    });
+  },
+  
+  bindFAB: function() {
+    var fab = document.getElementById('fab');
+    if (fab) {
+      fab.addEventListener('click', function() {
+        showAddHabitSheet();
+      });
+    }
+  },
+  
+  loadDashboardData: function() {
+    if (typeof google === 'undefined' || !google.script || !google.script.run) {
+      // Mock data for local/dev testing if google.script.run is not available
+      console.log('google.script.run not available — standing by');
+      document.getElementById('loading-screen').style.display = 'none';
+      document.getElementById('main-content').style.display = 'block';
+      document.getElementById('tab-bar').style.display = 'flex';
+      document.getElementById('fab').style.display = 'flex';
+      return;
+    }
+    
+    google.script.run
+      .withSuccessHandler(function(data) {
+        App.setState({
+          habits: data.habits || [],
+          todayLogs: data.todayLogs || [],
+          streaks: data.streaks || [],
+          config: data.config || {},
+          todayStr: data.todayStr || '',
+          loading: false
+        });
+        document.getElementById('loading-screen').style.display = 'none';
+        document.getElementById('main-content').style.display = 'block';
+        document.getElementById('tab-bar').style.display = 'flex';
+        document.getElementById('fab').style.display = 'flex';
+      })
+      .withFailureHandler(function(err) {
+        document.getElementById('loading-screen').innerHTML =
+          '<div class="error-state">⚠️ Failed to load: ' + err.message + '</div>';
+      })
+      .api_getDashboardData();
+  },
+  
+  showToast: function(message, type) {
+    var toast = document.createElement('div');
+    toast.className = 'toast toast-' + (type || 'info');
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(function() { toast.classList.add('show'); }, 10);
+    setTimeout(function() {
+      toast.classList.remove('show');
+      setTimeout(function() { toast.remove(); }, 300);
+    }, 3000);
+  }
+};
+
+// Placeholder renderers for initial SPA shell
+function renderDashboard() {}
+function renderHistory() {}
+function renderStats() {}
+function renderSettings() {}
+function showAddHabitSheet() {}
+function closeBottomSheet() {
+  document.getElementById('modal-overlay').classList.remove('active');
+  document.getElementById('bottom-sheet').classList.remove('active');
+}
+
+document.addEventListener('DOMContentLoaded', App.init);
 </script>

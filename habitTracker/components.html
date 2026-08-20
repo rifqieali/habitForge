@@ -1,0 +1,113 @@
+<script>
+// Component HTML Generators
+function renderHabitCardHTML(habit, log, streak) {
+  var isCompleted = log && (log.completed === true || log.completed === 'true');
+  var val = log ? log.value : 0;
+  
+  var targetText = '';
+  if (habit.type === 'boolean') {
+    targetText = isCompleted ? 'Completed today' : 'Tap to complete';
+  } else if (habit.type === 'quantitative') {
+    targetText = val + ' / ' + habit.target + ' ' + (habit.unit || '');
+  } else if (habit.type === 'duration') {
+    targetText = val + ' / ' + habit.target + ' menit';
+  }
+  
+  return `
+    <div class="habit-card ${isCompleted ? 'completed' : ''}" data-id="${habit.id}" data-type="${habit.type}">
+      <div class="habit-card-main" onclick="handleHabitTap('${habit.id}', '${habit.type}')">
+        <div class="habit-info">
+          <div class="habit-icon" style="background: ${habit.color}22; color: ${habit.color};">
+            ${habit.icon || '⭐'}
+          </div>
+          <div class="habit-details">
+            <h4>${habit.name}</h4>
+            <p>${targetText}</p>
+          </div>
+        </div>
+        <div class="check-box">
+          ✓
+        </div>
+      </div>
+      <div id="inline-input-${habit.id}" class="habit-inline-input" style="display:none;"></div>
+    </div>
+  `;
+}
+
+function renderAddHabitFormHTML() {
+  return `
+    <div class="sheet-header">
+      <h3>Habit Baru</h3>
+      <button class="btn-close" onclick="closeBottomSheet()">✕</button>
+    </div>
+    <form id="add-habit-form" onsubmit="saveNewHabit(event)">
+      <div class="form-group">
+        <label>Nama Habit</label>
+        <input type="text" id="habit-name" class="form-input" placeholder="Misal: Olahraga pagi" required>
+      </div>
+      
+      <div class="form-group">
+        <label>Tipe Habit</label>
+        <div class="pill-group">
+          <button type="button" class="pill-btn active" data-type="boolean" onclick="selectHabitType('boolean')">✅ Ya/Tidak</button>
+          <button type="button" class="pill-btn" data-type="quantitative" onclick="selectHabitType('quantitative')">🔢 Target Angka</button>
+          <button type="button" class="pill-btn" data-type="duration" onclick="selectHabitType('duration')">⏱️ Durasi</button>
+        </div>
+        <input type="hidden" id="habit-type-val" value="boolean">
+      </div>
+      
+      <div id="target-group" class="form-group" style="display:none;">
+        <label id="target-label">Target Value</label>
+        <input type="number" id="habit-target" class="form-input" value="1" min="1">
+      </div>
+      
+      <div id="unit-group" class="form-group" style="display:none;">
+        <label>Satuan (Unit)</label>
+        <input type="text" id="habit-unit" class="form-input" placeholder="Misal: gelas, halaman">
+      </div>
+      
+      <div class="form-group">
+        <label>Frekuensi</label>
+        <div class="pill-group">
+          <button type="button" class="pill-btn active" data-freq="daily" onclick="selectFrequency('daily')">Harian</button>
+          <button type="button" class="pill-btn" data-freq="weekly_count" onclick="selectFrequency('weekly_count')">X kali/Minggu</button>
+          <button type="button" class="pill-btn" data-freq="specific_days" onclick="selectFrequency('specific_days')">Hari Tertentu</button>
+        </div>
+        <input type="hidden" id="habit-freq-val" value="daily">
+      </div>
+      
+      <div id="freq-val-group" class="form-group" style="display:none;">
+        <label id="freq-val-label">Target per minggu</label>
+        <input type="number" id="habit-freq-val-input" class="form-input" value="3" min="1" max="7">
+      </div>
+      
+      <div class="form-group">
+        <label>Warna Theme</label>
+        <div class="color-picker-grid">
+          <div class="color-circle selected" style="background:#8b5cf6" onclick="selectColor('#8b5cf6', this)"></div>
+          <div class="color-circle" style="background:#06b6d4" onclick="selectColor('#06b6d4', this)"></div>
+          <div class="color-circle" style="background:#f59e0b" onclick="selectColor('#f59e0b', this)"></div>
+          <div class="color-circle" style="background:#f43f5e" onclick="selectColor('#f43f5e', this)"></div>
+          <div class="color-circle" style="background:#10b981" onclick="selectColor('#10b981', this)"></div>
+          <div class="color-circle" style="background:#3b82f6" onclick="selectColor('#3b82f6', this)"></div>
+          <div class="color-circle" style="background:#ec4899" onclick="selectColor('#ec4899', this)"></div>
+          <div class="color-circle" style="background:#6366f1" onclick="selectColor('#6366f1', this)"></div>
+        </div>
+        <input type="hidden" id="habit-color-val" value="#8b5cf6">
+      </div>
+      
+      <div class="form-group">
+        <label>Icon Emoji</label>
+        <div class="emoji-grid">
+          ${['⭐','🔥','💧','🏃','📚','💪','🧘','🎯','🍎','☕','😴','🚴','🎨','💻','💰','🌱'].map(e => `
+            <div class="emoji-item ${e==='⭐'?'selected':''}" onclick="selectIcon('${e}', this)">${e}</div>
+          `).join('')}
+        </div>
+        <input type="hidden" id="habit-icon-val" value="⭐">
+      </div>
+      
+      <button type="submit" class="btn-primary">Simpan Habit</button>
+    </form>
+  `;
+}
+</script>
