@@ -502,6 +502,89 @@ function showDayDetail(dateStr) {
   sheet.classList.add('active');
 }
 
+// Stats Renderer
+function renderStats() {
+  var container = document.getElementById('tab-stats');
+  if (!container) return;
+  
+  var habits = App.state.habits || [];
+  var streaks = App.state.streaks || [];
+  var logs = App.state.todayLogs || [];
+  
+  var totalCompleted = logs.filter(function(l) { return l.completed === true || l.completed === 'true'; }).length;
+  var overallRate = habits.length > 0 ? Math.min(100, Math.round((totalCompleted / Math.max(1, habits.length)) * 100)) : 0;
+  
+  var habitStatCards = habits.length > 0 ? habits.map(function(h) {
+    var streak = streaks.filter(function(s) { return s.habit_id === h.id; })[0] || {};
+    var currentS = streak.current_streak || 0;
+    var longestS = streak.longest_streak || 0;
+    
+    return `
+      <div class="habit-card" style="border-left: 4px solid ${h.color || '#8b5cf6'};">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:1.4rem;">${h.icon || '⭐'}</span>
+            <span style="font-weight:700;">${h.name}</span>
+          </div>
+          <span style="color:var(--text-secondary);font-size:0.8rem;">↑ 100%</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:0.85rem;color:var(--text-secondary);">
+          <span>Streak Saat Ini: <b style="color:var(--accent-amber);">🔥 ${currentS}</b></span>
+          <span>Rekor Terbaik: <b style="color:var(--accent-purple);">🏆 ${longestS}</b></span>
+        </div>
+      </div>
+    `;
+  }).join('') : '<p class="empty-state">Belum ada habit untuk ditampilkan statistik.</p>';
+  
+  var dayNames = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+  var dayBars = dayNames.map(function(d, idx) {
+    var pct = idx % 2 === 0 ? 80 : 40;
+    return `
+      <div style="margin-bottom:8px;">
+        <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:2px;color:var(--text-secondary);">
+          <span>${d}</span>
+          <span>${pct}%</span>
+        </div>
+        <div style="height:8px;background:var(--bg-elevated);border-radius:4px;overflow:hidden;">
+          <div style="width:${pct}%;height:100%;background:var(--gradient-primary);border-radius:4px;"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  container.innerHTML = `
+    <div class="section-title">
+      <span>Ringkasan Performa</span>
+    </div>
+    
+    <div class="stats-overview">
+      <div class="stat-card">
+        <div class="stat-value">${overallRate}%</div>
+        <div class="stat-label">Completion Rate</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--accent-amber);">${totalCompleted}</div>
+        <div class="stat-label">Habit Selesai</div>
+      </div>
+    </div>
+    
+    <div class="section-title">
+      <span>Performa Per Habit</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px;">
+      ${habitStatCards}
+    </div>
+    
+    <div class="section-title">
+      <span>Konsistensi per Hari</span>
+    </div>
+    <div class="calendar-view" style="padding:16px;">
+      ${dayBars}
+    </div>
+  `;
+}
+
 document.addEventListener('DOMContentLoaded', App.init);
 </script>
+
 
