@@ -1,0 +1,5 @@
+# Temporary & system files
+.superpowers/
+.gemini/
+node_modules/
+*.log
