@@ -34,6 +34,13 @@ function initializeSheets(ss) {
       sheet.getRange(1, 1, 1, SHEET_COLUMNS[name].length).setValues([SHEET_COLUMNS[name]]);
     }
   });
+  
+  // Create Dashboard sheet if missing
+  if (!ss.getSheetByName('Dashboard')) {
+    ss.insertSheet('Dashboard');
+  }
+  setupDashboardSheet(ss);
+
   // Seed default config
   var configSheet = ss.getSheetByName('Config');
   if (configSheet.getLastRow() <= 1) {
@@ -47,6 +54,30 @@ function initializeSheets(ss) {
     ss.deleteSheet(defaultSheet);
   }
 }
+
+function setupDashboardSheet(ss) {
+  var sheet = ss.getSheetByName('Dashboard');
+  if (!sheet || sheet.getLastRow() > 1) return;
+  
+  var headers = [
+    ['HabitForge Dashboard', '', ''],
+    ['', '', ''],
+    ['Metric', 'Value', 'Formula'],
+    ['Total Active Habits', '=COUNTA(Habits!A2:A)-COUNTIF(Habits!L2:L,TRUE)', ''],
+    ['Total Completions', '=COUNTIF(Logs!E2:E,TRUE)', ''],
+    ['Best Current Streak', '=MAX(Streaks!B2:B)', ''],
+    ['All-Time Longest Streak', '=MAX(Streaks!C2:C)', ''],
+    ['This Week Completions', '=COUNTIFS(Logs!E2:E,TRUE,Logs!B2:B,">="&TODAY()-WEEKDAY(TODAY(),2)+1)', ''],
+    ['This Month Completions', '=COUNTIFS(Logs!E2:E,TRUE,Logs!B2:B,">="&EOMONTH(TODAY(),-1)+1)', '']
+  ];
+  
+  sheet.getRange(1, 1, headers.length, 3).setValues(headers);
+  sheet.getRange(1, 1).setFontSize(16).setFontWeight('bold');
+  sheet.getRange(3, 1, 1, 3).setFontWeight('bold').setBackground('#e8eaf6');
+  sheet.setColumnWidth(1, 250);
+  sheet.setColumnWidth(2, 150);
+}
+
 
 function getSheet(sheetName) {
   return getOrCreateSpreadsheet().getSheetByName(sheetName);
