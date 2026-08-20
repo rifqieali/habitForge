@@ -83,22 +83,36 @@ function getSheet(sheetName) {
   return getOrCreateSpreadsheet().getSheetByName(sheetName);
 }
 
+function invalidateCache(sheetName) {
+  try { CacheService.getUserCache().remove('cache_' + sheetName); } catch(e) {}
+}
+
 function readAll(sheetName) {
+  var cache = CacheService.getUserCache();
+  var cached = cache.get('cache_' + sheetName);
+  if (cached) {
+    try { return JSON.parse(cached); } catch(e) {}
+  }
+  
   var sheet = getSheet(sheetName);
   var data = sheet.getDataRange().getValues();
   if (data.length <= 1) return [];
   var headers = data[0];
-  return data.slice(1).map(function(row) {
+  var result = data.slice(1).map(function(row) {
     var obj = {};
     headers.forEach(function(h, i) { obj[h] = row[i]; });
     return obj;
   });
+  
+  try { cache.put('cache_' + sheetName, JSON.stringify(result), 21600); } catch(e) {}
+  return result;
 }
 
 function appendRow(sheetName, rowObject) {
   var columns = SHEET_COLUMNS[sheetName];
   var row = columns.map(function(col) { return rowObject[col] !== undefined ? rowObject[col] : ''; });
   getSheet(sheetName).appendRow(row);
+  invalidateCache(sheetName);
 }
 
 function updateRow(sheetName, matchColumn, matchValue, updateObject) {
@@ -112,6 +126,7 @@ function updateRow(sheetName, matchColumn, matchValue, updateObject) {
         var ki = headers.indexOf(key);
         if (ki >= 0) sheet.getRange(i + 1, ki + 1).setValue(updateObject[key]);
       });
+      invalidateCache(sheetName);
       return true;
     }
   }
@@ -126,6 +141,7 @@ function deleteRow(sheetName, matchColumn, matchValue) {
   for (var i = data.length - 1; i >= 1; i--) {
     if (String(data[i][colIndex]) === String(matchValue)) {
       sheet.deleteRow(i + 1);
+      invalidateCache(sheetName);
       return true;
     }
   }

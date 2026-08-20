@@ -357,17 +357,27 @@ function saveNewHabit(e) {
   };
   
   closeBottomSheet();
-  App.showToast('Menyimpan habit...', 'info');
   
   if (typeof google !== 'undefined' && google.script && google.script.run) {
+    // Optimistic UI update
+    var tempId = 'temp-' + Date.now();
+    var optimisticHabit = Object.assign({}, habitData, { id: tempId, sort_order: Date.now() });
+    App.state.habits.push(optimisticHabit);
+    App.render();
+    App.showToast('Habit berhasil dibuat! 🚀', 'success');
+    
     google.script.run
       .withSuccessHandler(function(newHabit) {
-        App.state.habits.push(newHabit);
-        App.render();
-        App.showToast('Habit berhasil dibuat! 🚀', 'success');
+        var index = App.state.habits.findIndex(function(h) { return h.id === tempId; });
+        if (index !== -1) {
+          App.state.habits[index] = newHabit;
+          App.render();
+        }
       })
       .withFailureHandler(function(err) {
-        App.showToast('Gagal membuat habit: ' + err.message, 'error');
+        App.state.habits = App.state.habits.filter(function(h) { return h.id !== tempId; });
+        App.render();
+        App.showToast('Gagal menyimpan habit: ' + err.message, 'error');
       })
       .api_createHabit(habitData);
   } else {
