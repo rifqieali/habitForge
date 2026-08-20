@@ -2,11 +2,11 @@
 // Component HTML Generators
 function renderHabitCardHTML(habit, log, streak) {
   var isCompleted = log && (log.completed === true || log.completed === 'true');
-  var val = log ? log.value : 0;
+  var val = log ? Number(log.value) || 0 : 0;
   
   var targetText = '';
   if (habit.type === 'boolean') {
-    targetText = isCompleted ? 'Completed today' : 'Tap to complete';
+    targetText = isCompleted ? 'Selesai hari ini' : 'Tap untuk selesaikan';
   } else if (habit.type === 'quantitative') {
     targetText = val + ' / ' + habit.target + ' ' + (habit.unit || '');
   } else if (habit.type === 'duration') {
@@ -14,7 +14,7 @@ function renderHabitCardHTML(habit, log, streak) {
   }
   
   return `
-    <div class="habit-card ${isCompleted ? 'completed' : ''}" data-id="${habit.id}" data-type="${habit.type}">
+    <div class="habit-card ${isCompleted ? 'completed' : ''}" id="habit-card-${habit.id}" data-id="${habit.id}" data-type="${habit.type}">
       <div class="habit-card-main" onclick="handleHabitTap('${habit.id}', '${habit.type}')">
         <div class="habit-info">
           <div class="habit-icon" style="background: ${habit.color}22; color: ${habit.color};">
@@ -22,14 +22,17 @@ function renderHabitCardHTML(habit, log, streak) {
           </div>
           <div class="habit-details">
             <h4>${habit.name}</h4>
-            <p>${targetText}</p>
+            <p id="habit-text-${habit.id}">${targetText}</p>
           </div>
         </div>
-        <div class="check-box">
+        <div class="check-box" id="checkbox-${habit.id}">
           ✓
         </div>
       </div>
-      <div id="inline-input-${habit.id}" class="habit-inline-input" style="display:none;"></div>
+      <div id="inline-input-${habit.id}" class="habit-inline-input" style="display:none;">
+        <input type="number" id="input-val-${habit.id}" value="${val || habit.target || 1}" min="1" class="form-input">
+        <button class="btn-inline" onclick="submitInlineInput('${habit.id}', '${habit.type}')">Simpan</button>
+      </div>
     </div>
   `;
 }

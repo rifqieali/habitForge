@@ -25,9 +25,9 @@ var App = {
   render: function() {
     switch (App.state.activeTab) {
       case 'dashboard': renderDashboard(); break;
-      case 'history': renderHistory(); break;
-      case 'stats': renderStats(); break;
-      case 'settings': renderSettings(); break;
+      case 'history': if (typeof renderHistory === 'function') renderHistory(); break;
+      case 'stats': if (typeof renderStats === 'function') renderStats(); break;
+      case 'settings': if (typeof renderSettings === 'function') renderSettings(); break;
     }
   },
   
@@ -68,12 +68,12 @@ var App = {
   
   loadDashboardData: function() {
     if (typeof google === 'undefined' || !google.script || !google.script.run) {
-      // Mock data for local/dev testing if google.script.run is not available
-      console.log('google.script.run not available — standing by');
+      // Mock data for local development/test if needed
       document.getElementById('loading-screen').style.display = 'none';
       document.getElementById('main-content').style.display = 'block';
       document.getElementById('tab-bar').style.display = 'flex';
       document.getElementById('fab').style.display = 'flex';
+      App.render();
       return;
     }
     
@@ -112,15 +112,270 @@ var App = {
   }
 };
 
-// Placeholder renderers for initial SPA shell
-function renderDashboard() {}
-function renderHistory() {}
-function renderStats() {}
-function renderSettings() {}
-function showAddHabitSheet() {}
+// Dashboard Renderer
+function renderDashboard() {
+  var container = document.getElementById('tab-dashboard');
+  if (!container) return;
+  
+  var habits = App.state.habits || [];
+  var logs = App.state.todayLogs || [];
+  var streaks = App.state.streaks || [];
+  
+  // Find max streak across habits
+  var maxStreak = streaks.reduce(function(max, s) {
+    return Math.max(max, Number(s.current_streak) || 0);
+  }, 0);
+  
+  // Count completed today
+  var completedCount = habits.filter(function(h) {
+    var l = logs.filter(function(log) { return log.habit_id === h.id; })[0];
+    return l && (l.completed === true || l.completed === 'true');
+  }).length;
+  
+  var totalCount = habits.length;
+  var dashPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  var strokeDash = 157; // 2 * PI * 25
+  var strokeOffset = strokeDash - (strokeDash * dashPercent / 100);
+  
+  // Sort habits: uncompleted first, completed last
+  var sortedHabits = habits.slice().sort(function(a, b) {
+    var aDone = logs.some(function(l) { return l.habit_id === a.id && (l.completed === true || l.completed === 'true'); });
+    var bDone = logs.some(function(l) { return l.habit_id === b.id && (l.completed === true || l.completed === 'true'); });
+    if (aDone === bDone) return (a.sort_order || 0) - (b.sort_order || 0);
+    return aDone ? 1 : -1;
+  });
+  
+  var habitsHTML = sortedHabits.length > 0
+    ? sortedHabits.map(function(h) {
+        var log = logs.filter(function(l) { return l.habit_id === h.id; })[0];
+        var streak = streaks.filter(function(s) { return s.habit_id === h.id; })[0];
+        return renderHabitCardHTML(h, log, streak);
+      }).join('')
+    : `<div class="empty-state">
+         <div class="empty-icon">🚀</div>
+         <p>Belum ada habit. Tekan <b>+</b> untuk membuat habit baru!</p>
+       </div>`;
+
+  container.innerHTML = `
+    <div class="streak-banner">
+      <div class="streak-number">🔥 ${maxStreak} Hari</div>
+      <div class="streak-subtitle">Best Current Streak</div>
+    </div>
+    
+    <div class="progress-container">
+      <div class="progress-text-group">
+        <h3>Hari Ini</h3>
+        <p>${completedCount} dari ${totalCount} habit selesai</p>
+      </div>
+      <svg class="progress-svg" viewBox="0 0 60 60">
+        <defs>
+          <linearGradient id="progress-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#8b5cf6" />
+            <stop offset="100%" stop-color="#06b6d4" />
+          </linearGradient>
+        </defs>
+        <circle class="progress-bg-circle" cx="30" cy="30" r="25" />
+        <circle class="progress-fill-circle" cx="30" cy="30" r="25"
+                stroke-dasharray="${strokeDash}"
+                stroke-dashoffset="${strokeOffset}" />
+      </svg>
+    </div>
+    
+    <div class="section-title">
+      <span>Daftar Habit</span>
+    </div>
+    
+    <div class="habit-list">
+      ${habitsHTML}
+    </div>
+  `;
+}
+
+// Check-in Interactions
+function handleHabitTap(habitId, type) {
+  if (type === 'boolean') {
+    handleBooleanCheckIn(habitId);
+  } else {
+    var inlineInput = document.getElementById('inline-input-' + habitId);
+    if (inlineInput) {
+      var isHidden = inlineInput.style.display === 'none';
+      inlineInput.style.display = isHidden ? 'flex' : 'none';
+    }
+  }
+}
+
+function handleBooleanCheckIn(habitId) {
+  var logs = App.state.todayLogs || [];
+  var existingLog = logs.filter(function(l) { return l.habit_id === habitId; })[0];
+  var isDone = existingLog && (existingLog.completed === true || existingLog.completed === 'true');
+  
+  if (isDone) {
+    // Uncheck
+    App.state.todayLogs = logs.filter(function(l) { return l.habit_id !== habitId; });
+    App.render();
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      google.script.run
+        .withFailureHandler(function(err) { App.showToast('Gagal update: ' + err.message, 'error'); })
+        .api_uncheckIn(habitId);
+    }
+  } else {
+    // Check in
+    var newLog = { habit_id: habitId, value: 1, completed: true, date: App.state.todayStr };
+    App.state.todayLogs = logs.concat([newLog]);
+    App.render();
+    App.showToast('Great job! Habit selesai 🎉', 'success');
+    
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res && res.streak) {
+            var streaks = App.state.streaks.filter(function(s) { return s.habit_id !== habitId; });
+            App.state.streaks = streaks.concat([res.streak]);
+            App.render();
+          }
+        })
+        .withFailureHandler(function(err) { App.showToast('Gagal update: ' + err.message, 'error'); })
+        .api_checkIn(habitId, 1);
+    }
+  }
+}
+
+function submitInlineInput(habitId, type) {
+  var inputEl = document.getElementById('input-val-' + habitId);
+  if (!inputEl) return;
+  var val = Number(inputEl.value) || 0;
+  
+  var inlineInput = document.getElementById('inline-input-' + habitId);
+  if (inlineInput) inlineInput.style.display = 'none';
+  
+  var habit = App.state.habits.filter(function(h) { return h.id === habitId; })[0];
+  var target = habit ? Number(habit.target) || 1 : 1;
+  var completed = val >= target;
+  
+  var logs = App.state.todayLogs.filter(function(l) { return l.habit_id !== habitId; });
+  logs.push({ habit_id: habitId, value: val, completed: completed, date: App.state.todayStr });
+  App.state.todayLogs = logs;
+  App.render();
+  
+  if (completed) App.showToast('Target tercapai! 🔥', 'success');
+  
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.streak) {
+          var streaks = App.state.streaks.filter(function(s) { return s.habit_id !== habitId; });
+          App.state.streaks = streaks.concat([res.streak]);
+          App.render();
+        }
+      })
+      .withFailureHandler(function(err) { App.showToast('Gagal check-in: ' + err.message, 'error'); })
+      .api_checkIn(habitId, val);
+  }
+}
+
+// Add Habit Bottom Sheet
+function showAddHabitSheet() {
+  var sheet = document.getElementById('bottom-sheet');
+  var overlay = document.getElementById('modal-overlay');
+  sheet.innerHTML = renderAddHabitFormHTML();
+  overlay.classList.add('active');
+  sheet.classList.add('active');
+}
+
 function closeBottomSheet() {
   document.getElementById('modal-overlay').classList.remove('active');
   document.getElementById('bottom-sheet').classList.remove('active');
+}
+
+function selectHabitType(type) {
+  document.getElementById('habit-type-val').value = type;
+  document.querySelectorAll('[data-type]').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.type === type);
+  });
+  
+  var targetGroup = document.getElementById('target-group');
+  var unitGroup = document.getElementById('unit-group');
+  var targetLabel = document.getElementById('target-label');
+  
+  if (type === 'boolean') {
+    targetGroup.style.display = 'none';
+    unitGroup.style.display = 'none';
+  } else if (type === 'quantitative') {
+    targetGroup.style.display = 'flex';
+    unitGroup.style.display = 'flex';
+    targetLabel.textContent = 'Target Angka';
+  } else if (type === 'duration') {
+    targetGroup.style.display = 'flex';
+    unitGroup.style.display = 'none';
+    targetLabel.textContent = 'Target Durasi (Menit)';
+  }
+}
+
+function selectFrequency(freq) {
+  document.getElementById('habit-freq-val').value = freq;
+  document.querySelectorAll('[data-freq]').forEach(function(b) {
+    b.classList.toggle('active', b.dataset.freq === freq);
+  });
+  
+  var freqValGroup = document.getElementById('freq-val-group');
+  var freqValLabel = document.getElementById('freq-val-label');
+  
+  if (freq === 'daily') {
+    freqValGroup.style.display = 'none';
+  } else if (freq === 'weekly_count') {
+    freqValGroup.style.display = 'flex';
+    freqValLabel.textContent = 'Target per minggu (kali)';
+  } else if (freq === 'specific_days') {
+    freqValGroup.style.display = 'flex';
+    freqValLabel.textContent = 'Hari (misal: 1,3,5 untuk Senin,Rabu,Jumat)';
+  }
+}
+
+function selectColor(hex, el) {
+  document.getElementById('habit-color-val').value = hex;
+  document.querySelectorAll('.color-circle').forEach(function(c) { c.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+
+function selectIcon(icon, el) {
+  document.getElementById('habit-icon-val').value = icon;
+  document.querySelectorAll('.emoji-item').forEach(function(e) { e.classList.remove('selected'); });
+  el.classList.add('selected');
+}
+
+function saveNewHabit(e) {
+  e.preventDefault();
+  var habitData = {
+    name: document.getElementById('habit-name').value,
+    type: document.getElementById('habit-type-val').value,
+    target: Number(document.getElementById('habit-target').value) || 1,
+    unit: document.getElementById('habit-unit').value || '',
+    frequency: document.getElementById('habit-freq-val').value,
+    frequency_value: document.getElementById('habit-freq-val-input').value || '',
+    color: document.getElementById('habit-color-val').value,
+    icon: document.getElementById('habit-icon-val').value
+  };
+  
+  closeBottomSheet();
+  App.showToast('Menyimpan habit...', 'info');
+  
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run
+      .withSuccessHandler(function(newHabit) {
+        App.state.habits.push(newHabit);
+        App.render();
+        App.showToast('Habit berhasil dibuat! 🚀', 'success');
+      })
+      .withFailureHandler(function(err) {
+        App.showToast('Gagal membuat habit: ' + err.message, 'error');
+      })
+      .api_createHabit(habitData);
+  } else {
+    habitData.id = 'mock-' + Date.now();
+    App.state.habits.push(habitData);
+    App.render();
+    App.showToast('Habit berhasil dibuat (mock)! 🚀', 'success');
+  }
 }
 
 document.addEventListener('DOMContentLoaded', App.init);
