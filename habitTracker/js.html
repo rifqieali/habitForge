@@ -584,7 +584,204 @@ function renderStats() {
   `;
 }
 
+// Settings Renderer
+function renderSettings() {
+  var container = document.getElementById('tab-settings');
+  if (!container) return;
+  
+  var config = App.state.config || {};
+  var habits = App.state.habits || [];
+  var autoFreeze = config.auto_freeze === 'true' || config.auto_freeze === true;
+  var calendarEnabled = config.calendar_enabled === 'true' || config.calendar_enabled === true;
+  
+  var habitListHTML = habits.map(function(h) {
+    return `
+      <div class="settings-item" onclick="showEditHabitSheet('${h.id}')" style="cursor:pointer;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="font-size:1.2rem;">${h.icon || '⭐'}</span>
+          <span>${h.name}</span>
+        </div>
+        <span style="color:var(--text-muted);font-size:0.8rem;">Edit ⚙️</span>
+      </div>
+    `;
+  }).join('') || '<p class="empty-state">Belum ada habit.</p>';
+
+  container.innerHTML = `
+    <div class="section-title">
+      <span>Pengaturan Streak Freeze</span>
+    </div>
+    <div class="settings-group">
+      <div class="settings-item">
+        <div>
+          <div style="font-weight:600;">Auto Streak Freeze ❄️</div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);">Gunakan freeze otomatis jika miss 1 hari (2/bulan)</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="toggle-auto-freeze" ${autoFreeze ? 'checked' : ''} onchange="toggleAutoFreeze(this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="section-title">
+      <span>Google Calendar Integration 📅</span>
+    </div>
+    <div class="settings-group">
+      <div class="settings-item">
+        <div>
+          <div style="font-weight:600;">Sinkronkan ke Calendar</div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);">Tulis event otomatis saat habit selesai</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="toggle-calendar" ${calendarEnabled ? 'checked' : ''} onchange="toggleCalendar(this.checked)">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="form-group" style="padding-top:12px;">
+        <label>Calendar ID</label>
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="calendar-id-input" class="form-input" value="${config.calendar_id || 'primary'}">
+          <button class="btn-inline" onclick="testCalendarConnection()">Test</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-title">
+      <span>Kelola Habit</span>
+    </div>
+    <div class="settings-group">
+      ${habitListHTML}
+    </div>
+
+    <div class="section-title">
+      <span>System & Storage 📊</span>
+    </div>
+    <div class="settings-group">
+      <div class="settings-item" onclick="openSpreadsheet()" style="cursor:pointer;">
+        <div>
+          <div style="font-weight:600;">Buka Google Spreadsheet</div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);">Lihat database & dashboard analitik mentah</div>
+        </div>
+        <span>↗</span>
+      </div>
+      <div class="settings-item" onclick="installMidnightTrigger()" style="cursor:pointer;">
+        <div>
+          <div style="font-weight:600;">Install Trigger Tengah Malam</div>
+          <div style="font-size:0.75rem;color:var(--text-secondary);">Set pemicu otomatis streak & freeze jam 00.05</div>
+        </div>
+        <span>⚙️</span>
+      </div>
+    </div>
+  `;
+}
+
+function toggleAutoFreeze(enabled) {
+  App.state.config.auto_freeze = enabled ? 'true' : 'false';
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run.api_setConfig('auto_freeze', enabled ? 'true' : 'false');
+  }
+  App.showToast('Pengaturan auto-freeze disimpan', 'info');
+}
+
+function toggleCalendar(enabled) {
+  App.state.config.calendar_enabled = enabled ? 'true' : 'false';
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run.api_setConfig('calendar_enabled', enabled ? 'true' : 'false');
+  }
+  App.showToast('Pengaturan calendar disimpan', 'info');
+}
+
+function testCalendarConnection() {
+  var calId = document.getElementById('calendar-id-input').value;
+  App.showToast('Menghubungkan ke Calendar...', 'info');
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.success) {
+          App.showToast('Tersambung ke: ' + res.calendarName + ' ✅', 'success');
+          google.script.run.api_setConfig('calendar_id', calId);
+        } else {
+          App.showToast('Gagal: ' + (res.calendarName || 'Tidak dapat menemukan kalender'), 'error');
+        }
+      })
+      .api_testCalendar();
+  } else {
+    App.showToast('Tersambung (Mock Calendar) ✅', 'success');
+  }
+}
+
+function openSpreadsheet() {
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run
+      .withSuccessHandler(function(url) { window.open(url, '_blank'); })
+      .api_getSpreadsheetUrl();
+  } else {
+    App.showToast('Membuka Google Spreadsheet (mock)', 'info');
+  }
+}
+
+function installMidnightTrigger() {
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run
+      .withSuccessHandler(function() { App.showToast('Trigger otomatis berhasil diinstall! ⚙️', 'success'); })
+      .installMidnightTrigger();
+  } else {
+    App.showToast('Trigger diinstall (mock)', 'success');
+  }
+}
+
+function showEditHabitSheet(habitId) {
+  var habit = App.state.habits.filter(function(h) { return h.id === habitId; })[0];
+  if (!habit) return;
+  
+  var sheet = document.getElementById('bottom-sheet');
+  var overlay = document.getElementById('modal-overlay');
+  
+  sheet.innerHTML = `
+    <div class="sheet-header">
+      <h3>Edit Habit</h3>
+      <button class="btn-close" onclick="closeBottomSheet()">✕</button>
+    </div>
+    <div class="form-group">
+      <label>Nama Habit</label>
+      <input type="text" id="edit-habit-name" class="form-input" value="${habit.name}">
+    </div>
+    <button class="btn-primary" onclick="saveEditHabit('${habit.id}')">Simpan Perubahan</button>
+    <button class="btn-primary" style="background:var(--accent-rose);margin-top:8px;" onclick="deleteHabitConfirm('${habit.id}')">Hapus Habit</button>
+  `;
+  
+  overlay.classList.add('active');
+  sheet.classList.add('active');
+}
+
+function saveEditHabit(habitId) {
+  var newName = document.getElementById('edit-habit-name').value;
+  var habit = App.state.habits.filter(function(h) { return h.id === habitId; })[0];
+  if (habit) habit.name = newName;
+  
+  closeBottomSheet();
+  App.render();
+  App.showToast('Habit berhasil diperbarui!', 'success');
+  
+  if (typeof google !== 'undefined' && google.script && google.script.run) {
+    google.script.run.api_updateHabit(habitId, { name: newName });
+  }
+}
+
+function deleteHabitConfirm(habitId) {
+  if (confirm('Yakin ingin menghapus habit ini beserta seluruh histori & streak-nya?')) {
+    App.state.habits = App.state.habits.filter(function(h) { return h.id !== habitId; });
+    closeBottomSheet();
+    App.render();
+    App.showToast('Habit dihapus', 'info');
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      google.script.run.api_deleteHabit(habitId);
+    }
+  }
+}
+
 document.addEventListener('DOMContentLoaded', App.init);
 </script>
+
 
 
